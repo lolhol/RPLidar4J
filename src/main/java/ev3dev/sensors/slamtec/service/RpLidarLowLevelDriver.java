@@ -331,7 +331,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 	}
 
 	protected boolean parsePacket(byte[] data, int offset, int length, byte type) {
-		log.debug("!!!!");
+		//log.debug("!!!!");
 
 		switch (type) {
 			case (byte) RCV_INFO: // INFO
@@ -358,7 +358,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 			return false;
 		}
 
-		log.debug("GOT HEALTH PACKET!");
+		//log.debug("GOT HEALTH PACKET!");
 
 		health.status = data[offset] & 0xFF;
 		health.error_code = (data[offset + 1] & 0xFF) | ((data[offset + 2] & 0xFF) << 8);
@@ -439,9 +439,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 		public void run() {
 
 			while (run.get()) {
-
 				try {
-
 					if (in.available() > 0) {
 						int totalRead = in.read(data, size, data.length - size);
 
