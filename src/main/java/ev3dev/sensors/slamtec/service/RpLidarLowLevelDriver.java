@@ -57,6 +57,8 @@ public @Slf4j class RpLidarLowLevelDriver {
 	// if it is in scanning mode.  When in scanning mode it just parses measurement packets
 	boolean scanning = false;
 
+	boolean isForceStop;
+
 	// Type of packet last recieved
 	int lastReceived = 0;
 
@@ -76,7 +78,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 		serialPort = SerialPort.getCommPort(portName);
 		serialPort.openPort();
 		serialPort.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
-		serialPort.setComPortParameters(115200, 8, 1, 0);
+		serialPort.setComPortParameters(256000, 8, 1, 0);
 		serialPort.setFlowControl(0);
 		serialPort.clearDTR();
 
@@ -164,6 +166,10 @@ public @Slf4j class RpLidarLowLevelDriver {
 		return sendBlocking(GET_HEALTH, RCV_HEALTH, timeout);
 	}
 
+	public void forceStopScan() {
+		this.isForceStop = true;
+	}
+
 	/**
 	 * Low level blocking packet send routine
 	 */
@@ -177,7 +183,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 			do {
 				sendNoPayLoad(command);
 				pause(20);
-			} while (endTime >= System.currentTimeMillis() && lastReceived != expected);
+			} while (endTime >= System.currentTimeMillis() && lastReceived != expected && !isForceStop);
 			return lastReceived == expected;
 		}
 	}
@@ -265,6 +271,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 	 * Searches for and parses all complete packets inside data
 	 */
 	protected int parseData(byte[] data, int length) {
+		//log.debug("!!!!");
 
 		int offset = 0;
 
@@ -307,7 +314,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 					byte dataType = data[offset + 6];
 
 					if (verbose) {
-						log.debug("packet 0x%02x length = %d\n", dataType, packetLength);
+						//log.debug("packet 0x%02x length = %d\n", dataType, packetLength);
 					}
 					// see if it has received the entire packet
 					if (offset + 2 + 5 + packetLength > length) {
@@ -397,11 +404,15 @@ public @Slf4j class RpLidarLowLevelDriver {
 		boolean start0 = (b0 & 0x01) != 0;
 		boolean start1 = (b0 & 0x02) != 0;
 
-		if (start0 == start1)
+		if (start0 == start1) {
+			log.info("bad 1");
 			return false;
+		}
 
-		if ((b1 & 0x01) != 1)
+		if ((b1 & 0x01) != 1) {
+			log.info("bad 2");
 			return false;
+		}
 
 		measurement.timeMilli = System.currentTimeMillis();
 		measurement.start = start0;
@@ -422,7 +433,7 @@ public @Slf4j class RpLidarLowLevelDriver {
 	 */
 	public class ReadSerialThread implements Runnable {
 
-		byte data[] = new byte[1024 * 2];
+		byte data[] = new byte[10240 * 2];
 		int size = 0;
 
 		private AtomicBoolean run;

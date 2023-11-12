@@ -17,7 +17,7 @@ public @Slf4j class Demo4 {
 
         log.info("Testing RPLidar on a EV3Dev with Java");
 
-        final String USBPort = "/dev/ttyUSB0";
+        final String USBPort = "/dev/tty.usbserial-0001";
         final RPLidarA1 lidar = new RPLidarA1(USBPort);
         lidar.init();
 

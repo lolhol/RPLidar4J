@@ -15,6 +15,8 @@ dependencies {
    compile("org.projectlombok:lombok:1.16.18")
 
    compile("com.fazecast:jSerialComm:[2.0.0,3.0.0)")
+   implementation 'com.github.lolhol:AStarPathFinderJava:V1'
+   implementation 'com.github.lolhol:GridBoardModuleJava:1.0'
 
    testCompile("ch.qos.logback:logback-classic:1.2.3")
    testCompile("junit:junit:4.12")
@@ -48,7 +50,12 @@ task fatJar(type: Jar) {
    manifest {
       from file("${projectDir}/src/main/resources/META-INF/MANIFEST.MF")
    }
-   from { configurations.compile.collect { it.isDirectory() ? it : zipTree(it) } }
+   from {
+      configurations.compile.collect {
+         it.isDirectory() ? it : zipTree(it)
+      }
+   }
+
    with jar
 }
 

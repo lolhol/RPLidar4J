@@ -1,5 +1,6 @@
 package ev3dev.sensors.slamtec;
 
+import ev3dev.sensors.slamtec.model.RawScan;
 import ev3dev.sensors.slamtec.model.Scan;
 
 /**

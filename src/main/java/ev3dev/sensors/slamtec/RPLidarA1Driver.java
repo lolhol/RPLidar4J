@@ -1,5 +1,6 @@
 package ev3dev.sensors.slamtec;
 
+import ev3dev.sensors.slamtec.model.RawScan;
 import ev3dev.sensors.slamtec.model.Scan;
 import ev3dev.sensors.slamtec.model.ScanDistance;
 import ev3dev.sensors.slamtec.service.*;
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     private int counter = 0;
     private boolean flag = false;
     private List<ScanDistance> distancesTemp = Collections.synchronizedList(new ArrayList<>());
+    private List<Byte> rawTemp = Collections.synchronizedList(new ArrayList<>());
     private Scan scan;
 
     private final List<RPLidarProviderListener> listenerList = Collections.synchronizedList(new ArrayList());
@@ -36,12 +38,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
     @Override
     public void init() throws RPLidarA1ServiceException {
-
-        if(log.isInfoEnabled()){
+        if (log.isInfoEnabled()){
             log.info("Connecting with: {}", this.USBPort);
         }
+
         File f = new File(this.USBPort);
-        if(!f.exists() || f.isDirectory()) {
+        if (!f.exists() || f.isDirectory()) {
             log.error("This device is not valid: {}", this.USBPort);
             throw new RPLidarA1ServiceException("This device is not valid: " + this.USBPort);
         }
@@ -52,23 +54,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
         } catch (Exception e) {
             throw new RPLidarA1ServiceException(e);
         }
-        closingStatus = new AtomicBoolean(false);
-        driver.setVerbose(true);
-        driver.sendReset();
 
+        closingStatus = new AtomicBoolean(false);
+        driver.setVerbose(false);
+
+        driver.sendReset();
         //driver.sendGetHealth(100);
 
         //for v2 only - I guess this command is ignored by v1
         driver.sendStartMotor(600);
 
-        driver.pause(200);
+        //driver.sendReset();
+
+        driver.pause(600);
     }
 
     @Override
     public Scan scan() throws RPLidarA1ServiceException {
 
         driver.sendScan(300);
-        driver.pause(700);
+        driver.pause(1000);
 
         final List<ScanDistance> distances = new ArrayList<>();
         synchronized(distancesTemp){
@@ -81,10 +86,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
     @Override
     public void close() throws RPLidarA1ServiceException {
+        //driver.forceStopScan();
         closingStatus = new AtomicBoolean(true);
+
+        driver.pause(5000);
+
+        driver.sendStop();
         driver.sendStopMotor();
+        driver.sendReset();
+
         driver.shutdown();
-        driver.pause(100);
     }
 
     @Override
@@ -116,10 +127,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
     public void handleMeasurement(final RpLidarMeasurement measurement) {
 
         if(!closingStatus.get()){
-
             if(flag){
                 if(measurement.start){
-                    log.trace("{}", counter);
                     synchronized (distancesTemp) {
                         final List<ScanDistance> distances = new ArrayList<>();
                         distances.addAll(distancesTemp);

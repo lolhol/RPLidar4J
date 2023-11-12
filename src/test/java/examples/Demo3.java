@@ -14,7 +14,7 @@ public @Slf4j class Demo3 {
     public static void main(String[] args) throws Exception {
 
         log.info("Testing RPLidar on a EV3Dev with Java");
-        final String USBPort = "/dev/ttyUSB0";
+        final String USBPort = "/dev/tty.usbserial-0001";
         final RPLidarA1 lidar = new RPLidarA1(USBPort);
         lidar.init();
         lidar.addListener(new RPLidarProviderListener() {
@@ -30,9 +30,11 @@ public @Slf4j class Demo3 {
                         .forEach(System.out::println);
             }
         });
-        for(int x = 0; x <= 10; x++) {
+
+        for (int x = 0; x <= 10; x++) {
             lidar.scan();
         }
+
         lidar.close();
         log.info("End");
         System.exit(0);
