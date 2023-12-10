@@ -1,6 +1,7 @@
 package examples;
 
 import brigero.board.Board;
+import brigero.cartographer4java.Cartographer4Java;
 import edu.wlu.cs.levy.breezyslam.algorithms.RMHCSLAM;
 import edu.wlu.cs.levy.breezyslam.algorithms.SinglePositionSLAM;
 import edu.wlu.cs.levy.breezyslam.components.Laser;
@@ -18,8 +19,8 @@ import java.util.*;
 
 public @Slf4j class Demo {
     private final static int MAP_SIZE_PIXELS = 1600;
-    private final static double MAP_SIZE_METERS = 200; //32;
-    private final static double HOLE_WIDTH_MM = 3000; //32;
+    private final static double MAP_SIZE_METERS = 200; // 32;
+    private final static double HOLE_WIDTH_MM = 3000; // 32;
     private final static int MAP_QUALITY = 5; // 0-255; default 50
 
     private final static int SCAN_SIZE = 426;
@@ -31,13 +32,22 @@ public @Slf4j class Demo {
 
     public static void main(String[] args) {
         RPLidarLaser laser = new RPLidarLaser();
+        Cartographer4Java carto = new Cartographer4Java();
+
+        String currentDirectory = System.getProperty("user.dir");
+        System.out.println(currentDirectory + "!!!!!!!");
+
+        carto.init("src/test/java/examples/configuration_files", "mapping_imu.lua");
 
         try {
-            final String USBPort = "/dev/tty.usbserial-0001";
+            // ttyUSB0
+            final String USBPort = "/dev/ttyUSB0";
+            // final String USBPort = "/dev/tty.usbserial-0001";
             final RPLidarA1 lidar = new RPLidarA1(USBPort);
             lidar.init();
-            Board board = new Board(800, 800, new ArrayList<>(), new int[]{1, 1}, (int) MAP_SIZE_METERS);
-            //AutoFindTo finder = new AutoFindTo(new int[]{100, 100}, new int[]{0, 0});
+            // Board board = new Board(800, 800, new ArrayList<>(), new int[] { 1, 1 },
+            // (int) MAP_SIZE_METERS);
+            // AutoFindTo finder = new AutoFindTo(new int[]{100, 100}, new int[]{0, 0});
 
             new Thread(() -> {
                 long timePoint = System.currentTimeMillis();
@@ -51,34 +61,43 @@ public @Slf4j class Demo {
                 int x = 0;
                 while (isOpen) {
                     if (timePoint + 1000 < System.currentTimeMillis()) {
-                        byte[] mapBytes = new byte[MAP_SIZE_PIXELS*MAP_SIZE_PIXELS];
+                        byte[] mapBytes = new byte[MAP_SIZE_PIXELS * MAP_SIZE_PIXELS];
                         slam.getmap(mapBytes);
                         List<List<Integer>> twoDList = shortenList(make2DList(mapBytes), 800, 800);
 
                         for (int i = 0; i < twoDList.size(); ++i) {
                             for (int j = 0; j < twoDList.get(i).size(); ++j) {
-                                board.getRenderer().putData(j, i, twoDList.get(i).get(j));
+                                // board.getRenderer().putData(j, i, twoDList.get(i).get(j));
                             }
                         }
 
-                        board.getRenderer().updatePosition(slam.getpos().x_mm, slam.getpos().y_mm);
+                        // board.getRenderer().updatePosition(slam.getpos().x_mm, slam.getpos().y_mm);
 
-                        //log.info(String.valueOf(slam.getpos().theta_degrees));
+                        // log.info(String.valueOf(slam.getpos().theta_degrees));
 
-                        board.getRenderer().updateDeg(slam.getpos().theta_degrees);
-                        board.getRenderer().reDraw();
+                        // board.getRenderer().updateDeg(slam.getpos().theta_degrees);
+                        // board.getRenderer().reDraw();
 
                         x++;
                         if (x >= 10) {
-                            //finder.tick(board.getRenderer().getAbsPlayerPos(), board.getRenderer());
+                            // finder.tick(board.getRenderer().getAbsPlayerPos(), board.getRenderer());
                         }
+
+                        System.out.println("");
+                    }
+
+                    try {
+                        Thread.sleep(20);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
                     }
                 }
-            }).start();
+            });
 
             lidar.addListener(new RPLidarProviderListener() {
                 @Override
                 public void scanFinished(Scan scan) {
+                    System.out.println("SCAN!!!!!");
                     if (scan.getDistances().size() < 360) {
                         return;
                     }
@@ -86,13 +105,14 @@ public @Slf4j class Demo {
                     distances = new ArrayList<>(scan.getDistances());
                     distances.sort(Comparator.comparing(ScanDistance::getAngle));
 
-                    //log.info(String.valueOf(distances.size()));
+                    // log.info(String.valueOf(distances.size()));
 
                     int[] scanInt = new int[SCAN_SIZE];
 
                     for (int i = 0; i < scanInt.length; i++) {
                         // account for the hand
-                        //if (distances.get(i).getAngle() > 130 || distances.get(i).getAngle() < 230) continue;
+                        // if (distances.get(i).getAngle() > 130 || distances.get(i).getAngle() < 230)
+                        // continue;
                         final double angle = (double) i / scanInt.length * DETECTION_ANGLE_DEG;
                         final ScanDistance closest = findClosestScanDistance(distances, angle);
                         scanInt[i] = (int) Math.ceil(closest.getDistance() * 10);
@@ -104,42 +124,73 @@ public @Slf4j class Demo {
                         slam.map_quality = MAP_QUALITY;
                     }
 
-                    slam.update(scanInt);
-                    //slam.getpos().theta_degrees = 0;
-                    //Position position = slam.getpos();
+                    float[][] cartesianData = convertToCartesian(distances);
+                    float[] qualities = new float[distances.size()];
+                    for (int i = 0; i < distances.size(); i++) {
+                        qualities[i] = distances.get(i).getQuality();
+                    }
 
-                    //log.info("Measures: {}", scanInt.length);
+                    carto.updateLidarData(System.currentTimeMillis(), cartesianData[0], cartesianData[1], qualities);
+                    System.out.println(carto.posX() + " !!!! " + carto.posY());
+
+                    // slam.update(scanInt);
+                    // slam.getpos().theta_degrees = 0;
+                    // Position position = slam.getpos();
+
+                    // log.info("Measures: {}", scanInt.length);
                 }
             });
 
             lidar.scan();
 
-            Thread.sleep(120000);
+            Thread.sleep(10000);
             isOpen = false;
+            carto.stopAndOptimize();
 
-            byte[] mapBytes = new byte[MAP_SIZE_PIXELS*MAP_SIZE_PIXELS];
-            slam.getmap(mapBytes);
+            byte[] mapBytes = new byte[MAP_SIZE_PIXELS * MAP_SIZE_PIXELS];
+            //slam.getmap(mapBytes);
 
             final String fileName = new Date() + ".pgm";
             BufferedWriter output = new BufferedWriter(new FileWriter(fileName));
             output.write(String.format("P2\n%d %d 255\n", MAP_SIZE_PIXELS, MAP_SIZE_PIXELS));
             for (int y = 0; y < MAP_SIZE_PIXELS; y++) {
                 for (int x = 0; x < MAP_SIZE_PIXELS; x++) {
-                    output.write(String.format("%d ", (int) mapBytes[(int)(y * MAP_SIZE_PIXELS + x)] & 0xFF));
+                    output.write(String.format("%d ", (int) mapBytes[(int) (y * MAP_SIZE_PIXELS + x)] & 0xFF));
                 }
                 output.write("\n");
             }
             output.close();
 
-            //List<List<Integer>> twoDList = make2DList(mapBytes);
-            //System.out.println("Print => " + twoDList.size() + " | " + twoDList.get(0).size() + "!!!!");
+            // List<List<Integer>> twoDList = make2DList(mapBytes);
+            // System.out.println("Print => " + twoDList.size() + " | " +
+            // twoDList.get(0).size() + "!!!!");
 
-            //log.info("Wrote the file \"" + fileName + "\"");
+            // log.info("Wrote the file \"" + fileName + "\"");
             lidar.close();
-            //System.exit(0);
+            // System.exit(0);
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    public static float[][] convertToCartesian(List<ScanDistance> distances) {
+        float[] xCoordinates = new float[distances.size()];
+        float[] yCoordinates = new float[distances.size()];
+
+        for (int i = 0; i < distances.size(); i++) {
+            // Convert angles from degrees to radians
+            double angleRadians = Math.toRadians(distances.get(i).getAngle());
+
+            // Calculate X and Y coordinates using trigonometry
+            xCoordinates[i] = (float) (distances.get(i).getDistance() * Math.cos(angleRadians));
+            yCoordinates[i] = (float) (distances.get(i).getDistance() * Math.sin(angleRadians));
+        }
+
+        float[][] retList = new float[2][];
+        retList[0] = xCoordinates;
+        retList[1] = yCoordinates;
+
+        return retList;
     }
 
     public static ScanDistance findClosestScanDistance(List<ScanDistance> distances, double angle) {
@@ -191,21 +242,24 @@ public @Slf4j class Demo {
         return returnList;
     }
 
-    /*private static List<List<GridBoardData>> parseInts(List<List<Integer>> init) {
-        List<List<GridBoardData>> arr = new ArrayList<>();
-
-        for (int y = 0; y < init.size(); y++) {
-            List<GridBoardData> tmp = new ArrayList<>();
-
-            for (int x = 0; x < init.get(y).size(); x++) {
-                tmp.add(new GridBoardData(x, y, getState(init.get(y).get(x))));
-            }
-
-            arr.add(tmp);
-        }
-
-        return arr;
-    }*/
+    /*
+     * private static List<List<GridBoardData>> parseInts(List<List<Integer>> init)
+     * {
+     * List<List<GridBoardData>> arr = new ArrayList<>();
+     * 
+     * for (int y = 0; y < init.size(); y++) {
+     * List<GridBoardData> tmp = new ArrayList<>();
+     * 
+     * for (int x = 0; x < init.get(y).size(); x++) {
+     * tmp.add(new GridBoardData(x, y, getState(init.get(y).get(x))));
+     * }
+     * 
+     * arr.add(tmp);
+     * }
+     * 
+     * return arr;
+     * }
+     */
 
     public static int getState(int integer) {
         if (integer < 80) {
@@ -224,8 +278,8 @@ public @Slf4j class Demo {
     // 3 = blocked
 
     /*
-        int cellWidth = 50;
-        int cellHeight = 50;
+     * int cellWidth = 50;
+     * int cellHeight = 50;
      */
 
     private static List<List<Integer>> make2DList(byte[] mapBytes) {
@@ -235,7 +289,7 @@ public @Slf4j class Demo {
             List<Integer> innerList = new ArrayList<>();
 
             for (int x = 0; x < MAP_SIZE_PIXELS; x++) {
-                innerList.add((int) mapBytes[(int)(y * MAP_SIZE_PIXELS + x)] & 0xFF);
+                innerList.add((int) mapBytes[(int) (y * MAP_SIZE_PIXELS + x)] & 0xFF);
             }
 
             list2D.add(innerList);
@@ -266,7 +320,7 @@ public @Slf4j class Demo {
                 }
 
                 double avg = sum / (widthRatio * heightRatio);
-                row.add((int) avg);//avg < 80 ? 1 : avg < 128 ? 3 : 2);
+                row.add((int) avg);// avg < 80 ? 1 : avg < 128 ? 3 : 2);
             }
             shortenedList.add(row);
         }
@@ -274,17 +328,15 @@ public @Slf4j class Demo {
         return shortenedList;
     }
 
-    private static class RPLidarLaser extends Laser
-    {
-        public RPLidarLaser()
-        {
+    private static class RPLidarLaser extends Laser {
+        public RPLidarLaser() {
             // int scan_size,
             // double scan_rate_hz,
             // double detection_angle_degrees,
             // double distance_no_detection_mm,
             // int detection_margin,
             // double offset_mm)
-            //super(682, 10, 240, 4000, 70, 145);
+            // super(682, 10, 240, 4000, 70, 145);
 
             //////
             // super(426, 10, 360, 12000, 5, 145)

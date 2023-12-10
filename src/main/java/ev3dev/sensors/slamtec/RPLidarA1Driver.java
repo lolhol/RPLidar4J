@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
     }
 
     @Override
-    public void init() throws RPLidarA1ServiceException {
+    public void     init() throws RPLidarA1ServiceException {
         if (log.isInfoEnabled()){
             log.info("Connecting with: {}", this.USBPort);
         }
@@ -56,10 +56,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
         }
 
         closingStatus = new AtomicBoolean(false);
-        driver.setVerbose(false);
+        driver.setVerbose(true);
+
+        driver.pause(1000);
 
         driver.sendReset();
         //driver.sendGetHealth(100);
+
+        driver.pause(1000);
 
         //for v2 only - I guess this command is ignored by v1
         driver.sendStartMotor(600);
